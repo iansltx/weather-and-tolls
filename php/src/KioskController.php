@@ -37,6 +37,20 @@ final class KioskController
 			}
 		}
 
+		// Early hints (RFC 8297): let the client start fetching the entry
+		// stylesheet and ES module before the shell response is emitted.
+		// headers_send() only exists on FrankenPHP; skip the hints elsewhere.
+		if (($entryFile !== '' || $entryCss !== '') && function_exists('headers_send')) {
+			if ($entryCss !== '') {
+				header('Link: </' . $entryCss . '>; rel=preload; as=style', false);
+			}
+			if ($entryFile !== '') {
+				header('Link: </' . $entryFile . '>; rel=modulepreload', false);
+			}
+			headers_send(103);
+			header_remove('Link'); // keep the hints out of the final response
+		}
+
 		$script = $entryFile !== '' ? '<script type="module" src="/' . htmlspecialchars($entryFile, ENT_QUOTES) . '"></script>' : '';
 		$style = $entryCss !== '' ? '<link rel="stylesheet" href="/' . htmlspecialchars($entryCss, ENT_QUOTES) . '">' : '';
 
