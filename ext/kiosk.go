@@ -3,15 +3,21 @@
 // "PHP extensions written in Go" bridge. The Slim 4 routes and the poller
 // call these instead of talking to the upstream services themselves, so API
 // keys stay inside the Go layer.
+//
+// Errors surface as PHP exceptions: the exported functions return the
+// payload alongside an error message (nil on success), and the PHP glue in
+// kiosk.c — hand-maintained, since the extension generator only supports
+// single-value returns — throws a RuntimeException and propagates it to the
+// caller.
 package ext
 
 // #cgo linux CFLAGS: -D_GNU_SOURCE
 // #include <Zend/zend_types.h>
+// #include <stdlib.h>
 import "C"
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -24,12 +30,11 @@ import (
 )
 
 const (
-	envOpenWeatherKey   = "OPENWEATHER_API_KEY"
-	envHubURL           = "MERCURE_INTERNAL_URL"
-	envPublisherKey     = "MERCURE_PUBLISHER_JWT_KEY"
-	envSubscriberKey    = "MERCURE_SUBSCRIBER_JWT_KEY"
-	envInternalHubURL   = "http://127.0.0.1:80/.well-known/mercure"
-	defaultOpenWeatherK = ""
+	envOpenWeatherKey = "OPENWEATHER_API_KEY"
+	envHubURL         = "MERCURE_INTERNAL_URL"
+	envPublisherKey   = "MERCURE_PUBLISHER_JWT_KEY"
+	envSubscriberKey  = "MERCURE_SUBSCRIBER_JWT_KEY"
+	internalHubURL    = "http://127.0.0.1:80/.well-known/mercure"
 
 	fetchTimeout = 20 * time.Second
 
@@ -46,12 +51,18 @@ var (
 	geoByID = make(map[string]apiclients.GeoCoords)
 )
 
+func init() {
+	// Links the extension into the engine; kiosk.c defines the module entry
+	// and its PHP_FUNCTION glue.
+	frankenphp.RegisterExtension(unsafe.Pointer(&C.kiosk_module_entry))
+}
+
 func bootstrap() {
 	clientsOnce.Do(func() {
 		weather = apiclients.NewWeatherClient(strings.TrimSpace(os.Getenv(envOpenWeatherKey)), nil)
 		tolls = apiclients.NewTollClient(nil)
 		hub = NewMercureHub(
-			envOrDefault(envHubURL, envInternalHubURL),
+			envOrDefault(envHubURL, internalHubURL),
 			os.Getenv(envPublisherKey),
 			os.Getenv(envSubscriberKey),
 			nil,
@@ -67,16 +78,8 @@ func envOrDefault(name string, fallback string) string {
 	return value
 }
 
-// errorResult builds the bridge's uniform error payload: every function
-// returns an array carrying an "error" key, empty on success.
-func errorResult(err error) unsafe.Pointer {
-	return frankenphp.PHPMap(map[string]any{
-		"error": err.Error(),
-	})
-}
-
-// export_php:function kiosk_resolve_coords(string $location): array
-func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
+//export go_kiosk_resolve_coords
+func go_kiosk_resolve_coords(location *C.zend_string) (unsafe.Pointer, *C.char) {
 	bootstrap()
 
 	name := frankenphp.GoString(unsafe.Pointer(location))
@@ -86,10 +89,9 @@ func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
 	geoMu.Unlock()
 	if ok {
 		return frankenphp.PHPMap(map[string]any{
-			"lat":   cached.Lat,
-			"lon":   cached.Lon,
-			"error": "",
-		})
+			"lat": cached.Lat,
+			"lon": cached.Lon,
+		}), nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -97,7 +99,7 @@ func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
 
 	coords, err := weather.ResolveCoords(ctx, name)
 	if err != nil {
-		return errorResult(err)
+		return nil, C.CString(err.Error())
 	}
 
 	geoMu.Lock()
@@ -108,14 +110,13 @@ func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
 	geoMu.Unlock()
 
 	return frankenphp.PHPMap(map[string]any{
-		"lat":   coords.Lat,
-		"lon":   coords.Lon,
-		"error": "",
-	})
+		"lat": coords.Lat,
+		"lon": coords.Lon,
+	}), nil
 }
 
-// export_php:function kiosk_fetch_weather(float $lat, float $lon): array
-func kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
+//export go_kiosk_fetch_weather
+func go_kiosk_fetch_weather(lat float64, lon float64) (unsafe.Pointer, *C.char) {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -123,7 +124,7 @@ func kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
 
 	data, err := weather.FetchWeather(ctx, apiclients.GeoCoords{Lat: lat, Lon: lon})
 	if err != nil {
-		return errorResult(err)
+		return nil, C.CString(err.Error())
 	}
 
 	return frankenphp.PHPMap(map[string]any{
@@ -134,12 +135,11 @@ func kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
 		"dailyLow":    data.DailyLow,
 		"units":       data.Units,
 		"observedAt":  data.ObservedAt.UTC().Format(time.RFC3339),
-		"error":       "",
-	})
+	}), nil
 }
 
-// export_php:function kiosk_fetch_tolls(): array
-func kiosk_fetch_tolls() unsafe.Pointer {
+//export go_kiosk_fetch_tolls
+func go_kiosk_fetch_tolls() (unsafe.Pointer, *C.char) {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -147,7 +147,7 @@ func kiosk_fetch_tolls() unsafe.Pointer {
 
 	data, err := tolls.FetchTolls(ctx)
 	if err != nil {
-		return errorResult(err)
+		return nil, C.CString(err.Error())
 	}
 
 	rates := make([]any, 0, len(data.Rates))
@@ -163,12 +163,11 @@ func kiosk_fetch_tolls() unsafe.Pointer {
 	return frankenphp.PHPMap(map[string]any{
 		"requestedAt": data.RequestedAt.UTC().Format(time.RFC3339Nano),
 		"rates":       rates,
-		"error":       "",
-	})
+	}), nil
 }
 
-// export_php:function kiosk_mercure_subscriptions(): array
-func kiosk_mercure_subscriptions() unsafe.Pointer {
+//export go_kiosk_mercure_subscriptions
+func go_kiosk_mercure_subscriptions() (unsafe.Pointer, *C.char) {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -176,7 +175,7 @@ func kiosk_mercure_subscriptions() unsafe.Pointer {
 
 	entries, err := hub.Subscriptions(ctx)
 	if err != nil {
-		return errorResult(err)
+		return nil, C.CString(err.Error())
 	}
 
 	topics := make([]any, 0, len(entries))
@@ -186,12 +185,11 @@ func kiosk_mercure_subscriptions() unsafe.Pointer {
 
 	return frankenphp.PHPMap(map[string]any{
 		"topics": topics,
-		"error":  "",
-	})
+	}), nil
 }
 
-// export_php:function kiosk_mercure_publish(string $topic, string $data, string $type, string $id): array
-func kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zend_string, id *C.zend_string) unsafe.Pointer {
+//export go_kiosk_mercure_publish
+func go_kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zend_string, id *C.zend_string) (unsafe.Pointer, *C.char) {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -205,13 +203,10 @@ func kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zen
 		frankenphp.GoString(unsafe.Pointer(id)),
 	)
 	if err != nil {
-		return errorResult(err)
+		return nil, C.CString(err.Error())
 	}
 
 	return frankenphp.PHPMap(map[string]any{
-		"id":    updateID,
-		"error": "",
-	})
+		"id": updateID,
+	}), nil
 }
-
-var _ = fmt.Sprintf // retained import for future debug helpers

@@ -61,24 +61,6 @@ final class KioskState
 	}
 
 	/**
-	 * Calls a kiosk_* bridge function and turns the uniform {"error": ...}
-	 * payload into a proper exception.
-	 *
-	 * @param array<string, mixed> $result
-	 * @return array<string, mixed>
-	 */
-	public static function callExtension(array $result): array
-	{
-		$error = $result['error'] ?? '';
-		if (is_string($error) && $error === '') {
-			unset($result['error']);
-			return $result;
-		}
-
-		throw new \RuntimeException(is_string($error) ? $error : 'kiosk extension call failed');
-	}
-
-	/**
 	 * Fetches live weather and toll data through the Go extension bridge.
 	 *
 	 * @return array{weather: ?array<string, mixed>, weatherError: string, tolls: ?array<string, mixed>, tollError: string}
@@ -91,14 +73,14 @@ final class KioskState
 		$tollError = '';
 
 		try {
-			$coords = self::callExtension(kiosk_resolve_coords($location));
-			$weather = self::callExtension(kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = kiosk_resolve_coords($location);
+			$weather = kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']);
 		} catch (\Throwable $e) {
 			$weatherError = $e->getMessage();
 		}
 
 		try {
-			$tolls = self::callExtension(kiosk_fetch_tolls());
+			$tolls = kiosk_fetch_tolls();
 		} catch (\Throwable $e) {
 			$tollError = $e->getMessage();
 		}

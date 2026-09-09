@@ -87,8 +87,8 @@ final class KioskController
 		$location = $this->location($request);
 
 		try {
-			$coords = KioskState::callExtension(kiosk_resolve_coords($location));
-			$weather = KioskState::callExtension(kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = kiosk_resolve_coords($location);
+			$weather = kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']);
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}
@@ -103,7 +103,7 @@ final class KioskController
 	public function tolls(Request $request, Response $response): Response
 	{
 		try {
-			$tolls = KioskState::callExtension(kiosk_fetch_tolls());
+			$tolls = kiosk_fetch_tolls();
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}

@@ -105,7 +105,7 @@ final class Poller
 	private function activeTopics(): array
 	{
 		try {
-			$result = KioskState::callExtension(kiosk_mercure_subscriptions());
+			$result = kiosk_mercure_subscriptions();
 		} catch (\Throwable $e) {
 			$this->log('scan mercure subscriptions failed', ['error' => $e->getMessage()]);
 			return [];
@@ -243,7 +243,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$coords = KioskState::callExtension(kiosk_resolve_coords((string) $state['location']));
+			$coords = kiosk_resolve_coords((string) $state['location']);
 			$state['coords'] = ['lat' => (float) $coords['lat'], 'lon' => (float) $coords['lon']];
 			$state['weatherError'] = '';
 		} catch (\Throwable $e) {
@@ -259,10 +259,10 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension(kiosk_fetch_weather(
-				(float) $state['coords']['lat'],
-				(float) $state['coords']['lon'],
-			));
+			$data = kiosk_fetch_weather(
+			(float) $state['coords']['lat'],
+			(float) $state['coords']['lon'],
+		);
 
 			$state['weather'] = $data;
 			$state['weatherError'] = '';
@@ -284,7 +284,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension(kiosk_fetch_tolls());
+			$data = kiosk_fetch_tolls();
 
 			$state['tolls'] = $data;
 			$state['tollError'] = '';
@@ -357,12 +357,12 @@ final class Poller
 		$id = 'k-' . $this->seq;
 
 		try {
-			$result = KioskState::callExtension(kiosk_mercure_publish(
+			$result = kiosk_mercure_publish(
 				$topic,
 				$data,
 				'state',
 				$id,
-			));
+			);
 			$this->log('published state update', ['topic' => $topic, 'id' => $result['id'] ?? '', 'changed' => $changed, 'manual' => $manual]);
 		} catch (\Throwable $e) {
 			$this->log('publish state update failed', ['topic' => $topic, 'error' => $e->getMessage()]);
@@ -393,12 +393,12 @@ final class Poller
 		}
 
 		try {
-			KioskState::callExtension(kiosk_mercure_publish(
+			kiosk_mercure_publish(
 				KioskState::VersionTopic,
 				$data,
 				'version',
 				'version-' . $version,
-			));
+			);
 			$this->log('published frontend version update', ['version' => $version]);
 		} catch (\Throwable $e) {
 			$this->log('publish version event failed', ['error' => $e->getMessage()]);
