@@ -7,8 +7,10 @@ namespace Kiosk;
 /**
  * Shared state/payload helpers, and the app's wrapper around the extension:
  * it extends the Go extension's Kiosk\Bridge so its methods are reachable
- * right here. The JSON shapes produced here match the original Go
- * implementation byte-for-byte so the Vue frontend is unchanged.
+ * right here. An instance is constructed once per worker (or poller) and
+ * injected into KioskController / Poller. The JSON shapes produced here match
+ * the original Go implementation byte-for-byte so the Vue frontend is
+ * unchanged.
  */
 final class KioskState extends Bridge
 {
@@ -19,40 +21,40 @@ final class KioskState extends Bridge
 	public const MinRefreshSeconds = 30;
 	public const MaxRefreshSeconds = 3600;
 
-	public static function stateTopic(string $location): string
+	public function stateTopic(string $location): string
 	{
 		return self::StateTopicPrefix . self::base64UrlEncode($location);
 	}
 
-	public static function base64UrlEncode(string $value): string
+	public function base64UrlEncode(string $value): string
 	{
 		return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
 	}
 
-	public static function defaultLocation(): string
+	public function defaultLocation(): string
 	{
 		$location = trim(getenv('DEFAULT_WEATHER_LOCATION') ?: '');
 		return $location !== '' ? $location : 'Austin, TX, US';
 	}
 
-	public static function defaultRefreshSeconds(): int
+	public function defaultRefreshSeconds(): int
 	{
 		$seconds = (int) trim(getenv('KIOSK_REFRESH_SECONDS') ?: '');
 		return $seconds > 0 ? $seconds : 300;
 	}
 
-	public static function clampRefreshSeconds(int $seconds): int
+	public function clampRefreshSeconds(int $seconds): int
 	{
 		return max(self::MinRefreshSeconds, min(self::MaxRefreshSeconds, $seconds));
 	}
 
-	public static function webRoot(): string
+	public function webRoot(): string
 	{
 		$webRoot = trim(getenv('KIOSK_WEBROOT') ?: '');
 		return $webRoot !== '' ? $webRoot : '/app/public';
 	}
 
-	public static function version(): string
+	public function version(): string
 	{
 		$raw = @file_get_contents(self::webRoot() . '/version.txt');
 		if ($raw === false) {
@@ -69,7 +71,7 @@ final class KioskState extends Bridge
 	 * @param array<string, mixed> $result
 	 * @return array<string, mixed>
 	 */
-	public static function callExtension(array $result): array
+	public function callExtension(array $result): array
 	{
 		$error = $result['error'] ?? '';
 		if (is_string($error) && $error === '') {
@@ -85,24 +87,22 @@ final class KioskState extends Bridge
 	 *
 	 * @return array{weather: ?array<string, mixed>, weatherError: string, tolls: ?array<string, mixed>, tollError: string}
 	 */
-	public static function fetchLive(string $location): array
+	public function fetchLive(string $location): array
 	{
 		$weather = null;
 		$weatherError = '';
 		$tolls = null;
 		$tollError = '';
 
-		$bridge = new self();
-
 		try {
-			$coords = self::callExtension($bridge->resolveCoords($location));
-			$weather = self::callExtension($bridge->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = $this->callExtension($this->resolveCoords($location));
+			$weather = $this->callExtension($this->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
 		} catch (\Throwable $e) {
 			$weatherError = $e->getMessage();
 		}
 
 		try {
-			$tolls = self::callExtension($bridge->fetchTolls());
+			$tolls = $this->callExtension($this->fetchTolls());
 		} catch (\Throwable $e) {
 			$tollError = $e->getMessage();
 		}
@@ -124,7 +124,7 @@ final class KioskState extends Bridge
 	 * @param ?array<string, mixed> $tolls
 	 * @return array<string, mixed>
 	 */
-	public static function snapshot(
+	public function snapshot(
 		string $topic,
 		string $location,
 		string $version,
@@ -185,7 +185,7 @@ final class KioskState extends Bridge
 	 *
 	 * @param array<string, mixed> $snapshot
 	 */
-	public static function fingerprint(array $snapshot): string
+	public function fingerprint(array $snapshot): string
 	{
 		// The bridge's map values have nondeterministic key order, so the
 		// fingerprint picks explicit fields rather than re-encoding arrays.
@@ -224,7 +224,7 @@ final class KioskState extends Bridge
 		]) ?: '';
 	}
 
-	private static function iso(int $unixSeconds): string
+	private function iso(int $unixSeconds): string
 	{
 		return gmdate('Y-m-d\TH:i:s\Z', $unixSeconds);
 	}

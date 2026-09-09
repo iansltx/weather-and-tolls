@@ -6,8 +6,9 @@ namespace Kiosk;
 
 /**
  * Server-side poller: publishes weather and toll updates over Mercure while
- * clients are subscribed, using the Kiosk\Bridge Go extension for both the
- * upstream lookups and the hub interactions.
+ * clients are subscribed, using the injected KioskState wrapper (which
+ * extends the Kiosk\Bridge Go extension) for both the upstream lookups and
+ * the hub interactions.
  *
  * Scheduling semantics are ported from the original Go implementation (and
  * the terminal UI before it): a refresh is never attempted more than once
@@ -37,17 +38,17 @@ final class Poller
 	private float $scanInterval;
 	private int $versionInterval;
 	private string $workDir;
-	private Bridge $bridge;
+	private KioskState $state;
 
-	public function __construct()
+	public function __construct(KioskState $state)
 	{
-		$this->webRoot = KioskState::webRoot();
-		$this->refreshSeconds = KioskState::defaultRefreshSeconds();
+		$this->state = $state;
+		$this->webRoot = $state->webRoot();
+		$this->refreshSeconds = $state->defaultRefreshSeconds();
 		$this->scanInterval = max(1.0, (float) (getenv('KIOSK_SCAN_SECONDS') ?: 5));
 		$this->versionInterval = max(5, (int) (getenv('KIOSK_VERSION_SECONDS') ?: 30));
 		$this->workDir = sys_get_temp_dir() . '/kiosk-poller';
 		$this->version = $this->readVersion();
-		$this->bridge = new Bridge();
 
 		if (!is_dir($this->workDir)) {
 			@mkdir($this->workDir, 0777, true);
@@ -107,7 +108,7 @@ final class Poller
 	private function activeTopics(): array
 	{
 		try {
-			$result = KioskState::callExtension($this->bridge->mercureSubscriptions());
+			$result = $this->state->callExtension($this->state->mercureSubscriptions());
 		} catch (\Throwable $e) {
 			$this->log('scan mercure subscriptions failed', ['error' => $e->getMessage()]);
 			return [];
@@ -245,7 +246,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$coords = KioskState::callExtension($this->bridge->resolveCoords((string) $state['location']));
+			$coords = $this->state->callExtension($this->state->resolveCoords((string) $state['location']));
 			$state['coords'] = ['lat' => (float) $coords['lat'], 'lon' => (float) $coords['lon']];
 			$state['weatherError'] = '';
 		} catch (\Throwable $e) {
@@ -261,7 +262,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension($this->bridge->fetchWeather(
+			$data = $this->state->callExtension($this->state->fetchWeather(
 				(float) $state['coords']['lat'],
 				(float) $state['coords']['lon'],
 			));
@@ -286,7 +287,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension($this->bridge->fetchTolls());
+			$data = $this->state->callExtension($this->state->fetchTolls());
 
 			$state['tolls'] = $data;
 			$state['tollError'] = '';
@@ -330,7 +331,7 @@ final class Poller
 	{
 		$state = &$this->topics[$topic];
 
-		$snapshot = KioskState::snapshot(
+		$snapshot = $this->state->snapshot(
 			$topic,
 			(string) $state['location'],
 			$this->version,
@@ -345,7 +346,7 @@ final class Poller
 			$state['tolls'] !== null || $state['tollError'] !== '' ? (int) $state['nextTolls'] : null,
 		);
 
-		$fingerprint = KioskState::fingerprint($snapshot);
+		$fingerprint = $this->state->fingerprint($snapshot);
 		$changed = $fingerprint !== $state['fingerprint'];
 		$state['fingerprint'] = $fingerprint;
 
@@ -359,7 +360,7 @@ final class Poller
 		$id = 'k-' . $this->seq;
 
 		try {
-			$result = KioskState::callExtension($this->bridge->mercurePublish(
+			$result = $this->state->callExtension($this->state->mercurePublish(
 				$topic,
 				$data,
 				'state',
@@ -395,7 +396,7 @@ final class Poller
 		}
 
 		try {
-			KioskState::callExtension($this->bridge->mercurePublish(
+			$this->state->callExtension($this->state->mercurePublish(
 				KioskState::VersionTopic,
 				$data,
 				'version',

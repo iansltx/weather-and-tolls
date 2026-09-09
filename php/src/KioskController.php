@@ -10,18 +10,25 @@ use Slim\Psr7\Response as SlimResponse;
 
 /**
  * Slim 4 controllers for the kiosk HTTP API. The routes proxy both upstream
- * services through the Kiosk\Bridge Go extension, so API keys never leave
- * the Go layer.
+ * services through the Kiosk\Bridge Go extension (via the injected
+ * KioskState wrapper), so API keys never leave the Go layer.
  */
 final class KioskController
 {
+	private readonly KioskState $state;
+
+	public function __construct(KioskState $state)
+	{
+		$this->state = $state;
+	}
+
 	/**
 	 * App shell: renders the built Vue entry from the Vite manifest so the
 	 * hashed asset names always match the deployment.
 	 */
 	public function shell(Request $request, Response $response): Response
 	{
-		$webRoot = KioskState::webRoot();
+		$webRoot = $this->state->webRoot();
 		$manifestPath = $webRoot . '/.vite/manifest.json';
 
 		$entryFile = '';
@@ -82,12 +89,12 @@ final class KioskController
 		$location = $this->location($request);
 		$refreshSeconds = $this->refreshSeconds($request);
 
-		$live = KioskState::fetchLive($location);
+		$live = $this->state->fetchLive($location);
 
-		return $this->json($response, 200, KioskState::snapshot(
-			KioskState::stateTopic($location),
+		return $this->json($response, 200, $this->state->snapshot(
+			$this->state->stateTopic($location),
 			$location,
-			KioskState::version(),
+			$this->state->version(),
 			$refreshSeconds,
 			$live['weather'],
 			$live['weatherError'],
@@ -100,35 +107,31 @@ final class KioskController
 	{
 		$location = $this->location($request);
 
-		$bridge = new Bridge();
-
 		try {
-			$coords = KioskState::callExtension($bridge->resolveCoords($location));
-			$weather = KioskState::callExtension($bridge->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = $this->state->callExtension($this->state->resolveCoords($location));
+			$weather = $this->state->callExtension($this->state->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}
 
 		return $this->json($response, 200, [
 			'kind' => 'weather',
-			'version' => KioskState::version(),
+			'version' => $this->state->version(),
 			'weather' => $weather,
 		]);
 	}
 
 	public function tolls(Request $request, Response $response): Response
 	{
-		$bridge = new Bridge();
-
 		try {
-			$tolls = KioskState::callExtension($bridge->fetchTolls());
+			$tolls = $this->state->callExtension($this->state->fetchTolls());
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}
 
 		return $this->json($response, 200, [
 			'kind' => 'tolls',
-			'version' => KioskState::version(),
+			'version' => $this->state->version(),
 			'tolls' => $tolls,
 		]);
 	}
@@ -161,7 +164,7 @@ final class KioskController
 
 		return $this->json($response, 202, [
 			'status' => 'refreshing',
-			'topic' => KioskState::stateTopic($location),
+			'topic' => $this->state->stateTopic($location),
 			'location' => $location,
 		]);
 	}
@@ -170,7 +173,7 @@ final class KioskController
 	{
 		return $this->json($response, 200, [
 			'kind' => 'version',
-			'version' => KioskState::version(),
+			'version' => $this->state->version(),
 		]);
 	}
 
@@ -183,7 +186,7 @@ final class KioskController
 	{
 		$params = (array) $request->getQueryParams();
 		$location = trim((string) ($params['location'] ?? ''));
-		return $location !== '' ? $location : KioskState::defaultLocation();
+		return $location !== '' ? $location : $this->state->defaultLocation();
 	}
 
 	private function refreshSeconds(Request $request): int
@@ -191,10 +194,10 @@ final class KioskController
 		$params = (array) $request->getQueryParams();
 		$seconds = (int) trim((string) ($params['refresh'] ?? ''));
 		if ($seconds <= 0) {
-			return KioskState::defaultRefreshSeconds();
+			return $this->state->defaultRefreshSeconds();
 		}
 
-		return KioskState::clampRefreshSeconds($seconds);
+		return $this->state->clampRefreshSeconds($seconds);
 	}
 
 	private function json(Response $response, int $status, array $payload): Response

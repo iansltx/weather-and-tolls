@@ -13,10 +13,12 @@ declare(strict_types=1);
 require __DIR__ . '/../php/vendor/autoload.php';
 
 use Kiosk\KioskController;
+use Kiosk\KioskState;
 use Slim\Factory\AppFactory;
 
 $app = AppFactory::create();
-$controller = new KioskController();
+// One KioskState (and its Kiosk\Bridge Go object) per resident worker.
+$controller = new KioskController(new KioskState());
 
 $app->get('/api/state', [$controller, 'state']);
 $app->get('/api/weather', [$controller, 'weather']);

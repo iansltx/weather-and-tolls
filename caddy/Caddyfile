@@ -13,7 +13,7 @@
 	header /version.txt Cache-Control "no-cache"
 
 	mercure {
-		# The key used by the poller (via the kiosk_* Go extension bridge) to
+		# The key used by the poller (via the Kiosk\Bridge Go extension) to
 		# publish updates
 		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY}
 		# The key used to authorize the subscription listing API, which the
