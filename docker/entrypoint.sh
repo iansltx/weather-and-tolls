@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the FrankenPHP server and the PHP poller side by side. Both use the
-# same custom binary, so the kiosk_* Go extension bridge is available to the
+# same custom binary, so the Kiosk\Bridge Go extension is available to the
 # routes (Slim 4) and to the poller's PHP loop.
 frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile &
 SERVER_PID=$!

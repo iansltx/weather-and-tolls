@@ -19,15 +19,183 @@
 #include "kiosk_arginfo.h"
 #include "_cgo_export.h"
 
+#define VALIDATE_GO_HANDLE(intern) \
+    do { \
+        if ((intern)->go_handle == 0) { \
+            zend_throw_error(NULL, "Go object not found in registry"); \
+            RETURN_THROWS(); \
+        } \
+    } while (0)
+
+static zend_object_handlers object_handlers_kiosk;
+
+typedef struct {
+    uintptr_t go_handle;
+    zend_object std; /* This must be the last field in the structure: the property store starts at this offset */
+} kiosk_object;
+
+static inline kiosk_object *kiosk_object_from_obj(zend_object *obj) {
+    return (kiosk_object*)((char*)(obj) - offsetof(kiosk_object, std));
+}
+
+static zend_object *kiosk_create_object(zend_class_entry *ce) {
+    kiosk_object *intern = ecalloc(1, sizeof(kiosk_object) + zend_object_properties_size(ce));
+    
+    zend_object_std_init(&intern->std, ce);
+    object_properties_init(&intern->std, ce);
+    
+    intern->std.handlers = &object_handlers_kiosk;
+    intern->go_handle = 0; /* will be set in __construct */
+
+    return &intern->std;
+}
+
+static void kiosk_free_object(zend_object *object) {
+    kiosk_object *intern = kiosk_object_from_obj(object);
+
+    if (intern->go_handle != 0) {
+        removeGoObject(intern->go_handle);
+    }
+    
+    zend_object_std_dtor(&intern->std);
+}
+
+void init_object_handlers() {
+    memcpy(&object_handlers_kiosk, &std_object_handlers, sizeof(zend_object_handlers));
+    object_handlers_kiosk.free_obj = kiosk_free_object;
+    object_handlers_kiosk.clone_obj = NULL;
+    object_handlers_kiosk.offset = offsetof(kiosk_object, std);
+}
+
+static zend_class_entry *Bridge_ce = NULL;
+
+PHP_METHOD(Kiosk_Bridge, __construct) {
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+
+    /* Constructor is called more than once, make it no-op */
+    if (intern->go_handle != 0) {
+        return;
+    }
+
+    intern->go_handle = create_Bridge_object();
+}
+
+
+PHP_METHOD(Kiosk_Bridge, resolveCoords) {
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+    
+    VALIDATE_GO_HANDLE(intern);
+    zend_string *location = NULL;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(location)
+        ZEND_PARSE_PARAMETERS_END();
+    
+    void* result = resolveCoords_wrapper(intern->go_handle, location);
+    if (result != NULL) {
+        HashTable *ht = (HashTable*)result;
+        RETURN_ARR(ht);
+    } else {
+        RETURN_NULL();
+    }
+}
+
+PHP_METHOD(Kiosk_Bridge, fetchWeather) {
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+    
+    VALIDATE_GO_HANDLE(intern);
+    double lat = 0.0;
+    double lon = 0.0;
+    
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_DOUBLE(lat)
+        Z_PARAM_DOUBLE(lon)
+        ZEND_PARSE_PARAMETERS_END();
+    
+    void* result = fetchWeather_wrapper(intern->go_handle, (double)lat, (double)lon);
+    if (result != NULL) {
+        HashTable *ht = (HashTable*)result;
+        RETURN_ARR(ht);
+    } else {
+        RETURN_NULL();
+    }
+}
+
+PHP_METHOD(Kiosk_Bridge, fetchTolls) {
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+    
+    VALIDATE_GO_HANDLE(intern);
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    void* result = fetchTolls_wrapper(intern->go_handle);
+    if (result != NULL) {
+        HashTable *ht = (HashTable*)result;
+        RETURN_ARR(ht);
+    } else {
+        RETURN_NULL();
+    }
+}
+
+PHP_METHOD(Kiosk_Bridge, mercureSubscriptions) {
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+    
+    VALIDATE_GO_HANDLE(intern);
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    void* result = mercureSubscriptions_wrapper(intern->go_handle);
+    if (result != NULL) {
+        HashTable *ht = (HashTable*)result;
+        RETURN_ARR(ht);
+    } else {
+        RETURN_NULL();
+    }
+}
+
+PHP_METHOD(Kiosk_Bridge, mercurePublish) {
+    kiosk_object *intern = kiosk_object_from_obj(Z_OBJ_P(ZEND_THIS));
+    
+    VALIDATE_GO_HANDLE(intern);
+    zend_string *topic = NULL;
+    zend_string *data = NULL;
+    zend_string *updateType = NULL;
+    zend_string *id = NULL;
+    
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_STR(topic)
+        Z_PARAM_STR(data)
+        Z_PARAM_STR(updateType)
+        Z_PARAM_STR(id)
+        ZEND_PARSE_PARAMETERS_END();
+    
+    void* result = mercurePublish_wrapper(intern->go_handle, topic, data, updateType, id);
+    if (result != NULL) {
+        HashTable *ht = (HashTable*)result;
+        RETURN_ARR(ht);
+    } else {
+        RETURN_NULL();
+    }
+}
+
+void register_all_classes() {
+    init_object_handlers();
+    Bridge_ce = register_class_Kiosk_Bridge();
+    if (!Bridge_ce) {
+        php_error_docref(NULL, E_ERROR, "Failed to register class Bridge");
+        return;
+    }
+    Bridge_ce->create_object = kiosk_create_object;
+}
 
 PHP_MINIT_FUNCTION(kiosk) {
-    
+    register_all_classes();
     return SUCCESS;
 }
 
 zend_module_entry kiosk_module_entry = {STANDARD_MODULE_HEADER,
                                          "kiosk",
-                                         ext_functions,             /* Functions */
+                                         NULL,             /* Functions */
                                          PHP_MINIT(kiosk),  /* MINIT */
                                          NULL,                      /* MSHUTDOWN */
                                          NULL,                      /* RINIT */
@@ -35,75 +203,3 @@ zend_module_entry kiosk_module_entry = {STANDARD_MODULE_HEADER,
                                          NULL,                      /* MINFO */
                                          "1.0.0",                   /* Version */
                                          STANDARD_MODULE_PROPERTIES};
-PHP_FUNCTION(kiosk_resolve_coords)
-{
-    zend_string *location = NULL;
-    ZEND_PARSE_PARAMETERS_START(1, 1)
-        Z_PARAM_STR(location)
-    ZEND_PARSE_PARAMETERS_END();
-    zend_array *result = go_kiosk_resolve_coords(location);
-    if (result) {
-        RETURN_ARR(result);
-    }
-
-	RETURN_EMPTY_ARRAY();
-}
-
-PHP_FUNCTION(kiosk_fetch_weather)
-{
-    double lat = 0.0;
-    double lon = 0.0;
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_DOUBLE(lat)
-        Z_PARAM_DOUBLE(lon)
-    ZEND_PARSE_PARAMETERS_END();
-    zend_array *result = go_kiosk_fetch_weather((double) lat, (double) lon);
-    if (result) {
-        RETURN_ARR(result);
-    }
-
-	RETURN_EMPTY_ARRAY();
-}
-
-PHP_FUNCTION(kiosk_fetch_tolls)
-{
-    ZEND_PARSE_PARAMETERS_NONE();
-    zend_array *result = go_kiosk_fetch_tolls();
-    if (result) {
-        RETURN_ARR(result);
-    }
-
-	RETURN_EMPTY_ARRAY();
-}
-
-PHP_FUNCTION(kiosk_mercure_subscriptions)
-{
-    ZEND_PARSE_PARAMETERS_NONE();
-    zend_array *result = go_kiosk_mercure_subscriptions();
-    if (result) {
-        RETURN_ARR(result);
-    }
-
-	RETURN_EMPTY_ARRAY();
-}
-
-PHP_FUNCTION(kiosk_mercure_publish)
-{
-    zend_string *topic = NULL;
-    zend_string *data = NULL;
-    zend_string *type = NULL;
-    zend_string *id = NULL;
-    ZEND_PARSE_PARAMETERS_START(4, 4)
-        Z_PARAM_STR(topic)
-        Z_PARAM_STR(data)
-        Z_PARAM_STR(type)
-        Z_PARAM_STR(id)
-    ZEND_PARSE_PARAMETERS_END();
-    zend_array *result = go_kiosk_mercure_publish(topic, data, type, id);
-    if (result) {
-        RETURN_ARR(result);
-    }
-
-	RETURN_EMPTY_ARRAY();
-}
-

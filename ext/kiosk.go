@@ -1,8 +1,8 @@
 // Package ext exposes the kiosk's data-source lookups and Mercure
-// interactions to PHP as native functions, via FrankenPHP's
-// "PHP extensions written in Go" bridge. The Slim 4 routes and the poller
-// call these instead of talking to the upstream services themselves, so API
-// keys stay inside the Go layer.
+// interactions to PHP as methods of the namespaced Kiosk\Bridge class, via
+// FrankenPHP's "PHP extensions written in Go" bridge. The Slim 4 routes and
+// the poller call these instead of talking to the upstream services
+// themselves, so API keys stay inside the Go layer.
 package ext
 
 // #cgo linux CFLAGS: -D_GNU_SOURCE
@@ -22,6 +22,8 @@ import (
 
 	"ian.im/weather-and-tolls/apiclients"
 )
+
+// export_php:namespace Kiosk
 
 const (
 	envOpenWeatherKey   = "OPENWEATHER_API_KEY"
@@ -67,7 +69,7 @@ func envOrDefault(name string, fallback string) string {
 	return value
 }
 
-// errorResult builds the bridge's uniform error payload: every function
+// errorResult builds the bridge's uniform error payload: every method
 // returns an array carrying an "error" key, empty on success.
 func errorResult(err error) unsafe.Pointer {
 	return frankenphp.PHPMap(map[string]any{
@@ -75,8 +77,11 @@ func errorResult(err error) unsafe.Pointer {
 	})
 }
 
-// export_php:function kiosk_resolve_coords(string $location): array
-func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
+// export_php:class Bridge
+type Bridge struct{}
+
+// export_php:method Bridge::resolveCoords(string $location): array
+func (b *Bridge) ResolveCoords(location *C.zend_string) unsafe.Pointer {
 	bootstrap()
 
 	name := frankenphp.GoString(unsafe.Pointer(location))
@@ -114,8 +119,8 @@ func kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
 	})
 }
 
-// export_php:function kiosk_fetch_weather(float $lat, float $lon): array
-func kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
+// export_php:method Bridge::fetchWeather(float $lat, float $lon): array
+func (b *Bridge) FetchWeather(lat float64, lon float64) unsafe.Pointer {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -138,8 +143,8 @@ func kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
 	})
 }
 
-// export_php:function kiosk_fetch_tolls(): array
-func kiosk_fetch_tolls() unsafe.Pointer {
+// export_php:method Bridge::fetchTolls(): array
+func (b *Bridge) FetchTolls() unsafe.Pointer {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -167,8 +172,8 @@ func kiosk_fetch_tolls() unsafe.Pointer {
 	})
 }
 
-// export_php:function kiosk_mercure_subscriptions(): array
-func kiosk_mercure_subscriptions() unsafe.Pointer {
+// export_php:method Bridge::mercureSubscriptions(): array
+func (b *Bridge) MercureSubscriptions() unsafe.Pointer {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -190,8 +195,8 @@ func kiosk_mercure_subscriptions() unsafe.Pointer {
 	})
 }
 
-// export_php:function kiosk_mercure_publish(string $topic, string $data, string $type, string $id): array
-func kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zend_string, id *C.zend_string) unsafe.Pointer {
+// export_php:method Bridge::mercurePublish(string $topic, string $data, string $updateType, string $id): array
+func (b *Bridge) MercurePublish(topic *C.zend_string, data *C.zend_string, updateType *C.zend_string, id *C.zend_string) unsafe.Pointer {
 	bootstrap()
 
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
@@ -201,7 +206,7 @@ func kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zen
 		ctx,
 		frankenphp.GoString(unsafe.Pointer(topic)),
 		[]byte(frankenphp.GoString(unsafe.Pointer(data))),
-		frankenphp.GoString(unsafe.Pointer(typ)),
+		frankenphp.GoString(unsafe.Pointer(updateType)),
 		frankenphp.GoString(unsafe.Pointer(id)),
 	)
 	if err != nil {

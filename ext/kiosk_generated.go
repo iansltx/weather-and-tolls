@@ -13,7 +13,7 @@ package ext
 // #include "kiosk.h"
 import "C"
 import (
-	_ "runtime/cgo"
+	"runtime/cgo"
 	"unsafe"
 
 	"github.com/dunglas/frankenphp"
@@ -23,27 +23,76 @@ func init() {
 	frankenphp.RegisterExtension(unsafe.Pointer(&C.kiosk_module_entry))
 }
 
-//export go_kiosk_resolve_coords
-func go_kiosk_resolve_coords(location *C.zend_string) unsafe.Pointer {
-	return kiosk_resolve_coords(location)
+//export registerGoObject
+func registerGoObject(obj interface{}) C.uintptr_t {
+	handle := cgo.NewHandle(obj)
+	return C.uintptr_t(handle)
 }
 
-//export go_kiosk_fetch_weather
-func go_kiosk_fetch_weather(lat float64, lon float64) unsafe.Pointer {
-	return kiosk_fetch_weather(lat, lon)
+//export getGoObject
+func getGoObject(handle C.uintptr_t) interface{} {
+	h := cgo.Handle(handle)
+	return h.Value()
 }
 
-//export go_kiosk_fetch_tolls
-func go_kiosk_fetch_tolls() unsafe.Pointer {
-	return kiosk_fetch_tolls()
+//export removeGoObject
+func removeGoObject(handle C.uintptr_t) {
+	h := cgo.Handle(handle)
+	h.Delete()
 }
 
-//export go_kiosk_mercure_subscriptions
-func go_kiosk_mercure_subscriptions() unsafe.Pointer {
-	return kiosk_mercure_subscriptions()
+//export create_Bridge_object
+func create_Bridge_object() C.uintptr_t {
+	obj := &Bridge{}
+	return registerGoObject(obj)
 }
 
-//export go_kiosk_mercure_publish
-func go_kiosk_mercure_publish(topic *C.zend_string, data *C.zend_string, typ *C.zend_string, id *C.zend_string) unsafe.Pointer {
-	return kiosk_mercure_publish(topic, data, typ, id)
+//export resolveCoords_wrapper
+func resolveCoords_wrapper(handle C.uintptr_t, location *C.zend_string) unsafe.Pointer {
+	obj := getGoObject(handle)
+	if obj == nil {
+		return nil
+	}
+	structObj := obj.(*Bridge)
+	return structObj.ResolveCoords(location)
+}
+
+//export fetchWeather_wrapper
+func fetchWeather_wrapper(handle C.uintptr_t, lat float64, lon float64) unsafe.Pointer {
+	obj := getGoObject(handle)
+	if obj == nil {
+		return nil
+	}
+	structObj := obj.(*Bridge)
+	return structObj.FetchWeather(lat, lon)
+}
+
+//export fetchTolls_wrapper
+func fetchTolls_wrapper(handle C.uintptr_t) unsafe.Pointer {
+	obj := getGoObject(handle)
+	if obj == nil {
+		return nil
+	}
+	structObj := obj.(*Bridge)
+	return structObj.FetchTolls()
+}
+
+//export mercureSubscriptions_wrapper
+func mercureSubscriptions_wrapper(handle C.uintptr_t) unsafe.Pointer {
+	obj := getGoObject(handle)
+	if obj == nil {
+		return nil
+	}
+	structObj := obj.(*Bridge)
+	return structObj.MercureSubscriptions()
+}
+
+//export mercurePublish_wrapper
+func mercurePublish_wrapper(handle C.uintptr_t, topic *C.zend_string, data *C.zend_string, updateType *C.zend_string, id *C.zend_string) unsafe.Pointer {
+	obj := getGoObject(handle)
+	if obj == nil {
+		return nil
+	}
+	structObj := obj.(*Bridge)
+	return structObj.MercurePublish(topic, data, updateType, id)
 }

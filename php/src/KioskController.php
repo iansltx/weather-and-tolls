@@ -10,7 +10,7 @@ use Slim\Psr7\Response as SlimResponse;
 
 /**
  * Slim 4 controllers for the kiosk HTTP API. The routes proxy both upstream
- * services through the kiosk_* Go extension bridge, so API keys never leave
+ * services through the Kiosk\Bridge Go extension, so API keys never leave
  * the Go layer.
  */
 final class KioskController
@@ -100,9 +100,11 @@ final class KioskController
 	{
 		$location = $this->location($request);
 
+		$bridge = new Bridge();
+
 		try {
-			$coords = KioskState::callExtension(kiosk_resolve_coords($location));
-			$weather = KioskState::callExtension(kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = KioskState::callExtension($bridge->resolveCoords($location));
+			$weather = KioskState::callExtension($bridge->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}
@@ -116,8 +118,10 @@ final class KioskController
 
 	public function tolls(Request $request, Response $response): Response
 	{
+		$bridge = new Bridge();
+
 		try {
-			$tolls = KioskState::callExtension(kiosk_fetch_tolls());
+			$tolls = KioskState::callExtension($bridge->fetchTolls());
 		} catch (\Throwable $e) {
 			return $this->json($response, 502, ['error' => $e->getMessage()]);
 		}

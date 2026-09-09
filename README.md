@@ -15,7 +15,7 @@ built on PHP/FrankenPHP to demo its Go/PHP extensibility:
 ```
 Browser (Vue) ──SSE──> Mercure hub ──<── PHP poller ──> kiosk_* Go extension ──> OpenWeather / Mobility Authority
       │                                                          (FrankenPHP Go/PHP bridge)
-      └────HTTP────> Slim 4 routes (PHP) ────────┘
+      └────HTTP────> Slim 4 (PHP worker) ────────┘
 ```
 
 ## How it works
@@ -23,16 +23,18 @@ Browser (Vue) ──SSE──> Mercure hub ──<── PHP poller ──> kios
 - **Routes** are plain PHP on [Slim 4](https://www.slimframework.com/)
   (`php/`): `/api/state`, `/api/weather`, `/api/tolls`, `POST /api/refresh`,
   `/api/version`, `/api/health`, plus the app shell, which is rendered from
-  the Vite build manifest.
-- **Data-source calls** are native PHP functions implemented in Go (`ext/`),
-  loaded as a PHP extension inside a custom FrankenPHP binary:
-  `kiosk_resolve_coords()`, `kiosk_fetch_weather()`, `kiosk_fetch_tolls()`,
-  `kiosk_mercure_subscriptions()`, `kiosk_mercure_publish()`. The functions
-  wrap the clients in `apiclients/`, and API keys stay inside the Go layer,
-  never reaching the client.
+  the Vite build manifest. The front controller runs in FrankenPHP worker
+  mode (`frankenphp_handle_request()`): the Slim app is booted once and kept
+  resident instead of being re-executed for every request.
+- **Data-source calls** are methods on a native PHP class implemented in Go
+  (`ext/`), loaded as a PHP extension inside a custom FrankenPHP binary:
+  `Kiosk\Bridge::resolveCoords()`, `::fetchWeather()`, `::fetchTolls()`,
+  `::mercureSubscriptions()`, `::mercurePublish()`. The methods wrap the
+  clients in `apiclients/`, and API keys stay inside the Go layer, never
+  reaching the client.
 - **The poller** (`php/bin/poller.php`) is a PHP loop that runs alongside the
   server. It polls upstream only while clients are connected (detected via
-  `kiosk_mercure_subscriptions()`), keeps the same refresh interval /
+  `Kiosk\Bridge::mercureSubscriptions()`), keeps the same refresh interval /
   shared-cadence debounce / exponential backoff behavior as the original
   terminal UI, and publishes the snapshot over Mercure after every completed
   refresh cycle — so "as of" times and refresh countdowns stay live, and any

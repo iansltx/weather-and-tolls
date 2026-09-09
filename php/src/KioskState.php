@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Kiosk;
 
 /**
- * Shared state/payload helpers. The JSON shapes produced here match the
- * original Go implementation byte-for-byte so the Vue frontend is unchanged.
+ * Shared state/payload helpers, and the app's wrapper around the extension:
+ * it extends the Go extension's Kiosk\Bridge so its methods are reachable
+ * right here. The JSON shapes produced here match the original Go
+ * implementation byte-for-byte so the Vue frontend is unchanged.
  */
-final class KioskState
+final class KioskState extends Bridge
 {
 	// Must match webapp/ext/kiosk.go.
 	public const VersionTopic = 'https://kiosk.local/version';
@@ -61,7 +63,7 @@ final class KioskState
 	}
 
 	/**
-	 * Calls a kiosk_* bridge function and turns the uniform {"error": ...}
+	 * Calls a Kiosk\Bridge method and turns the uniform {"error": ...}
 	 * payload into a proper exception.
 	 *
 	 * @param array<string, mixed> $result
@@ -90,15 +92,17 @@ final class KioskState
 		$tolls = null;
 		$tollError = '';
 
+		$bridge = new self();
+
 		try {
-			$coords = self::callExtension(kiosk_resolve_coords($location));
-			$weather = self::callExtension(kiosk_fetch_weather((float) $coords['lat'], (float) $coords['lon']));
+			$coords = self::callExtension($bridge->resolveCoords($location));
+			$weather = self::callExtension($bridge->fetchWeather((float) $coords['lat'], (float) $coords['lon']));
 		} catch (\Throwable $e) {
 			$weatherError = $e->getMessage();
 		}
 
 		try {
-			$tolls = self::callExtension(kiosk_fetch_tolls());
+			$tolls = self::callExtension($bridge->fetchTolls());
 		} catch (\Throwable $e) {
 			$tollError = $e->getMessage();
 		}

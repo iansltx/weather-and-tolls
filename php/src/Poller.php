@@ -6,7 +6,7 @@ namespace Kiosk;
 
 /**
  * Server-side poller: publishes weather and toll updates over Mercure while
- * clients are subscribed, using the kiosk_* Go extension bridge for both the
+ * clients are subscribed, using the Kiosk\Bridge Go extension for both the
  * upstream lookups and the hub interactions.
  *
  * Scheduling semantics are ported from the original Go implementation (and
@@ -37,6 +37,7 @@ final class Poller
 	private float $scanInterval;
 	private int $versionInterval;
 	private string $workDir;
+	private Bridge $bridge;
 
 	public function __construct()
 	{
@@ -46,6 +47,7 @@ final class Poller
 		$this->versionInterval = max(5, (int) (getenv('KIOSK_VERSION_SECONDS') ?: 30));
 		$this->workDir = sys_get_temp_dir() . '/kiosk-poller';
 		$this->version = $this->readVersion();
+		$this->bridge = new Bridge();
 
 		if (!is_dir($this->workDir)) {
 			@mkdir($this->workDir, 0777, true);
@@ -105,7 +107,7 @@ final class Poller
 	private function activeTopics(): array
 	{
 		try {
-			$result = KioskState::callExtension(kiosk_mercure_subscriptions());
+			$result = KioskState::callExtension($this->bridge->mercureSubscriptions());
 		} catch (\Throwable $e) {
 			$this->log('scan mercure subscriptions failed', ['error' => $e->getMessage()]);
 			return [];
@@ -243,7 +245,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$coords = KioskState::callExtension(kiosk_resolve_coords((string) $state['location']));
+			$coords = KioskState::callExtension($this->bridge->resolveCoords((string) $state['location']));
 			$state['coords'] = ['lat' => (float) $coords['lat'], 'lon' => (float) $coords['lon']];
 			$state['weatherError'] = '';
 		} catch (\Throwable $e) {
@@ -259,7 +261,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension(kiosk_fetch_weather(
+			$data = KioskState::callExtension($this->bridge->fetchWeather(
 				(float) $state['coords']['lat'],
 				(float) $state['coords']['lon'],
 			));
@@ -284,7 +286,7 @@ final class Poller
 		$state = &$this->topics[$topic];
 
 		try {
-			$data = KioskState::callExtension(kiosk_fetch_tolls());
+			$data = KioskState::callExtension($this->bridge->fetchTolls());
 
 			$state['tolls'] = $data;
 			$state['tollError'] = '';
@@ -357,7 +359,7 @@ final class Poller
 		$id = 'k-' . $this->seq;
 
 		try {
-			$result = KioskState::callExtension(kiosk_mercure_publish(
+			$result = KioskState::callExtension($this->bridge->mercurePublish(
 				$topic,
 				$data,
 				'state',
@@ -393,7 +395,7 @@ final class Poller
 		}
 
 		try {
-			KioskState::callExtension(kiosk_mercure_publish(
+			KioskState::callExtension($this->bridge->mercurePublish(
 				KioskState::VersionTopic,
 				$data,
 				'version',

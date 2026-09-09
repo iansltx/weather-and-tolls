@@ -11,14 +11,22 @@
 // You may edit the file and remove this comment if you plan to manually maintain
 // this file going forward.
 
-function kiosk_resolve_coords(string $location): array {}
+namespace Kiosk;
 
-function kiosk_fetch_weather(float $lat, float $lon): array {}
+class Bridge {
 
-function kiosk_fetch_tolls(): array {}
+    public function __construct() {}
 
-function kiosk_mercure_subscriptions(): array {}
+    public function resolveCoords(string $location): array {}
 
-function kiosk_mercure_publish(string $topic, string $data, string $type, string $id): array {}
+    public function fetchWeather(float $lat, float $lon): array {}
+
+    public function fetchTolls(): array {}
+
+    public function mercureSubscriptions(): array {}
+
+    public function mercurePublish(string $topic, string $data, string $updateType, string $id): array {}
+
+}
 
 
