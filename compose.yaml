@@ -1,0 +1,30 @@
+name: weather-and-tolls
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: weather-and-tolls:latest
+    ports:
+      - "${KIOSK_PORT:-8080}:8080"
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-:8080}
+      MERCURE_PUBLISHER_JWT_KEY: "${MERCURE_PUBLISHER_JWT_KEY:-!ChangeThisMercureHubJWTSecretKey!}"
+      MERCURE_SUBSCRIBER_JWT_KEY: "${MERCURE_SUBSCRIBER_JWT_KEY:-!ChangeThisMercureHubJWTSecretKey2!}"
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      OPENWEATHER_BASE_URL: ${OPENWEATHER_BASE_URL:-}
+      TOLL_RATES_URL: ${TOLL_RATES_URL:-}
+      DEFAULT_WEATHER_LOCATION: ${DEFAULT_WEATHER_LOCATION:-Austin, TX, US}
+      KIOSK_REFRESH_SECONDS: ${KIOSK_REFRESH_SECONDS:-}
+      MERCURE_INTERNAL_URL: http://127.0.0.1:8080/.well-known/mercure
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    tty: true
+
+volumes:
+  caddy_data:
+  caddy_config:

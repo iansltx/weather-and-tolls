@@ -1,0 +1,19 @@
+{
+	"name": "ian/kiosk-webapp",
+	"description": "Kiosk web app: Slim 4 routes over the FrankenPHP Go extension bridge",
+	"type": "project",
+	"license": "proprietary",
+	"require": {
+		"php": ">=8.2",
+		"slim/slim": "^4.14",
+		"slim/psr7": "^1.7"
+	},
+	"autoload": {
+		"psr-4": {
+			"Kiosk\\": "src/"
+		}
+	},
+	"config": {
+		"sort-packages": true
+	}
+}

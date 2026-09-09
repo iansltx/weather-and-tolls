@@ -1,0 +1,29 @@
+{
+	skip_install_trust
+
+	frankenphp
+}
+
+{$SERVER_NAME:localhost:8080} {
+	root {$SERVER_ROOT:/app/public}
+	encode zstd br gzip
+
+	# The version marker must always be revalidated so that clients pick up a
+	# new frontend version on reload.
+	header /version.txt Cache-Control "no-cache"
+
+	mercure {
+		# The key used by the poller (via the kiosk_* Go extension bridge) to
+		# publish updates
+		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY}
+		# The key used to authorize the subscription listing API, which the
+		# poller uses to decide when clients are connected
+		subscriber_jwt {env.MERCURE_SUBSCRIBER_JWT_KEY}
+		# The kiosk UI subscribes without a token
+		anonymous
+		# Expose the subscription API for connected-client detection
+		subscriptions
+	}
+
+	php_server
+}

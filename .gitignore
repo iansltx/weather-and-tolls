@@ -1,0 +1,11 @@
+# Dependencies / build outputs
+node_modules/
+frontend/dist/
+php/vendor/
+
+# Local configuration and secrets
+.env
+
+# IDE / OS
+/.idea/
+.DS_Store
