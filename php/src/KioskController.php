@@ -15,11 +15,8 @@ use Slim\Psr7\Response as SlimResponse;
  */
 final class KioskController
 {
-	private readonly KioskState $state;
-
-	public function __construct(KioskState $state)
+	public function __construct(private readonly KioskState $state)
 	{
-		$this->state = $state;
 	}
 
 	/**

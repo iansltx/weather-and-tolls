@@ -38,11 +38,9 @@ final class Poller
 	private float $scanInterval;
 	private int $versionInterval;
 	private string $workDir;
-	private KioskState $state;
 
-	public function __construct(KioskState $state)
+	public function __construct(private KioskState $state)
 	{
-		$this->state = $state;
 		$this->webRoot = $state->webRoot();
 		$this->refreshSeconds = $state->defaultRefreshSeconds();
 		$this->scanInterval = max(1.0, (float) (getenv('KIOSK_SCAN_SECONDS') ?: 5));
