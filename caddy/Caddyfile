@@ -25,5 +25,15 @@
 		subscriptions
 	}
 
-	php_server
+	php_server {
+		# The front controller is executed as a long-running FrankenPHP
+		# worker: the Slim app boots once and stays resident, and each
+		# request is dispatched to it via frankenphp_handle_request().
+		# Static assets are still served from disk; php_server rewrites
+		# every other path to index.php, which the worker pool handles.
+		worker {
+			file /app/public/index.php
+			num 2
+		}
+	}
 }
